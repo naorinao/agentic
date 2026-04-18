@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 import httpx
@@ -8,7 +9,11 @@ import httpx
 from app.schemas import FetchedData, HttpAPIFetchConfig
 
 
+logger = logging.getLogger(__name__)
+
+
 async def fetch_http_api(config: HttpAPIFetchConfig, timeout_seconds: int) -> FetchedData:
+    logger.info("Fetching HTTP API data from %s with method=%s", config.url, config.method)
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:
         response = await client.request(
             config.method,
@@ -18,6 +23,12 @@ async def fetch_http_api(config: HttpAPIFetchConfig, timeout_seconds: int) -> Fe
             json=config.json_body,
         )
         response.raise_for_status()
+    logger.info(
+        "Fetched HTTP API response from %s with status=%s content_type=%s",
+        config.url,
+        response.status_code,
+        response.headers.get("content-type", "unknown"),
+    )
 
     content_type = response.headers.get("content-type", "")
     payload: dict[str, Any]

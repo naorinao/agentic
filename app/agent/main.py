@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 
 from pydantic_ai import Agent, RunContext
@@ -15,6 +16,9 @@ from app.agent.skills import load_skill_texts
 from app.config import AppSettings
 from app.schemas import AgentDecision, RunRequest
 from app.tools.local_script import run_local_script
+
+
+logger = logging.getLogger(__name__)
 
 
 BASE_INSTRUCTIONS = """
@@ -38,6 +42,7 @@ class AgentDependencies:
 
 def build_model(settings: AppSettings):
     provider_name = settings.model_provider.lower()
+    logger.info("Building model provider=%s model=%s", provider_name, settings.model_name)
     if provider_name == "ollama":
         return OllamaModel(
             settings.model_name,
@@ -125,6 +130,13 @@ async def run_agent(
     toolsets: list[object] | None = None,
 ) -> AgentDecision:
     selected_toolsets = toolsets or []
+    logger.info(
+        "Starting agent run for job=%s trigger=%s toolsets=%s skills=%s",
+        request.job_name,
+        request.trigger,
+        len(selected_toolsets),
+        request.skill_ids,
+    )
     deps = AgentDependencies(
         request=request,
         workspace_dir=workspace_dir,
@@ -134,4 +146,10 @@ async def run_agent(
     agent = create_agent(settings=settings, toolsets=selected_toolsets)
     async with agent:
         result = await agent.run("Analyze the fetched data and decide whether to notify Slack.", deps=deps)
+    logger.info(
+        "Agent run completed for job=%s should_notify_slack=%s follow_up_actions=%s",
+        request.job_name,
+        result.output.should_notify_slack,
+        len(result.output.follow_up_actions),
+    )
     return result.output

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,11 @@ from typing import Any
 from app.schemas import FetchedData, GhCLIFetchConfig
 
 
+logger = logging.getLogger(__name__)
+
+
 async def fetch_gh_cli(config: GhCLIFetchConfig, workspace_dir: Path) -> FetchedData:
+    logger.info("Fetching GitHub data with gh command: gh %s", " ".join(config.args))
     try:
         process = await asyncio.create_subprocess_exec(
             "gh",
@@ -40,6 +45,12 @@ async def fetch_gh_cli(config: GhCLIFetchConfig, workspace_dir: Path) -> Fetched
             payload = {"text": stdout}
         else:
             payload = json_payload if isinstance(json_payload, dict) else {"items": json_payload}
+
+    logger.info(
+        "Fetched GitHub CLI output successfully with exit_code=%s stdout_bytes=%s",
+        process.returncode,
+        len(stdout_bytes),
+    )
 
     return FetchedData(
         source=f"gh {' '.join(config.args)}".strip(),

@@ -18,6 +18,7 @@ class AppSettings(BaseSettings):
     model_base_url: str = Field(default="http://localhost:11434/v1", alias="MODEL_BASE_URL")
     model_api_key: str = Field(default="ollama", alias="MODEL_API_KEY")
     fetch_timeout_seconds: int = Field(default=30, alias="FETCH_TIMEOUT_SECONDS")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     slack_webhook_url: str | None = Field(default=None, alias="SLACK_WEBHOOK_URL")
     allowed_script_dir: Path = Field(default=Path("scripts"), alias="ALLOWED_SCRIPT_DIR")
 

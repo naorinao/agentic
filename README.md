@@ -41,6 +41,7 @@ MODEL_PROVIDER=openai-compatible
 MODEL_NAME=qwen3
 MODEL_BASE_URL=http://localhost:11434/v1
 MODEL_API_KEY=ollama
+LOG_LEVEL=INFO
 ```
 
 If you want the dedicated Ollama provider instead:
@@ -65,6 +66,12 @@ Dry run:
 
 ```bash
 .venv/bin/python -m app.runner --job daily_digest --dry-run
+```
+
+Debug run with verbose logs:
+
+```bash
+.venv/bin/python -m app.runner --job daily_digest --dry-run --log-level DEBUG
 ```
 
 Live run:
