@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scheduled-agent-mvp"
+version = "0.1.0"
+description = "Minimal scheduled agent with PydanticAI, skills, MCP, and Slack webhook support"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.28.0,<1.0.0",
+  "mcp>=1.27.0,<2.0.0",
+  "pydantic-ai>=1.84.0,<2.0.0",
+  "pydantic-settings>=2.8.0,<3.0.0",
+  "pyyaml>=6.0.2,<7.0.0",
+]
+
+[project.scripts]
+agent-runner = "app.runner:main"
+agent-mcp-server = "app.mcp_server:main"
+
+[tool.setuptools]
+packages = ["app", "app.agent", "app.fetchers", "app.tools"]

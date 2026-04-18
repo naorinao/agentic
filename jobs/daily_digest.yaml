@@ -1,0 +1,22 @@
+name: daily_digest
+prompt: >-
+  Review the fetched API payload, decide if it is important enough for Slack,
+  and prepare a concise message when needed.
+skills:
+  - default
+  - digest
+fetch:
+  type: http_api
+  url: https://jsonplaceholder.typicode.com/todos/1
+  method: GET
+  summary_hint: Example API payload for validating the MVP pipeline.
+mcp:
+  enabled: true
+  transport: stdio
+  command: python
+  args:
+    - -m
+    - app.mcp_server
+  tool_prefix: ops
+notify:
+  slack_webhook_env: SLACK_WEBHOOK_URL
