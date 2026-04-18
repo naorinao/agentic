@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.ollama import OllamaModel
@@ -14,11 +16,16 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agent.skills import load_skill_texts
 from app.config import AppSettings
-from app.schemas import AgentDecision, RunRequest
+from app.schemas import AgentDecision, FetchedData, RunRequest
 from app.tools.local_script import run_local_script
 
 
 logger = logging.getLogger(__name__)
+
+MAX_PREVIEW_CHARS = 12000
+MAX_LIST_ITEMS = 20
+MAX_STRING_CHARS = 500
+MAX_NESTED_DEPTH = 6
 
 
 BASE_INSTRUCTIONS = """
@@ -29,6 +36,8 @@ Use tools when they can improve correctness.
 Only request a Slack notification when the information is actionable or materially important.
 If you set should_notify_slack to false, leave slack_message as null.
 Keep summaries concise and factual.
+When a Slack message template is provided, follow its structure for slack_message.text.
+Do not invent fields or sections that are not supported by the fetched data.
 """.strip()
 
 
@@ -38,6 +47,51 @@ class AgentDependencies:
     workspace_dir: Path
     allowed_script_dir: Path
     skill_texts: list[str]
+
+
+def _shrink_for_prompt(value: Any, depth: int = 0) -> Any:
+    if depth >= MAX_NESTED_DEPTH:
+        return "<truncated nested content>"
+
+    if isinstance(value, dict):
+        return {key: _shrink_for_prompt(item, depth + 1) for key, item in value.items()}
+
+    if isinstance(value, list):
+        kept_items = [_shrink_for_prompt(item, depth + 1) for item in value[:MAX_LIST_ITEMS]]
+        remaining_items = len(value) - len(kept_items)
+        if remaining_items > 0:
+            kept_items.append(f"<truncated {remaining_items} more items>")
+        return kept_items
+
+    if isinstance(value, str) and len(value) > MAX_STRING_CHARS:
+        return f"{value[:MAX_STRING_CHARS]}<truncated {len(value) - MAX_STRING_CHARS} chars>"
+
+    return value
+
+
+def build_data_preview(data: list[FetchedData]) -> str:
+    compact_items = []
+    for item in data:
+        compact_items.append(
+            {
+                "source": item.source,
+                "fetched_at": item.fetched_at.isoformat(),
+                "text_summary": item.text_summary,
+                "payload": _shrink_for_prompt(item.payload),
+            }
+        )
+
+    preview = json.dumps(compact_items, ensure_ascii=True, separators=(",", ":")) if compact_items else "[]"
+    if len(preview) > MAX_PREVIEW_CHARS:
+        logger.info(
+            "Trimmed agent data preview from chars=%s to chars=%s",
+            len(preview),
+            MAX_PREVIEW_CHARS,
+        )
+        return f"{preview[:MAX_PREVIEW_CHARS]}...<truncated {len(preview) - MAX_PREVIEW_CHARS} chars>"
+
+    logger.info("Prepared agent data preview chars=%s", len(preview))
+    return preview
 
 
 def build_model(settings: AppSettings):
@@ -86,11 +140,13 @@ def create_agent(settings: AppSettings, toolsets: list[object]) -> Agent[AgentDe
     def inject_context(ctx: RunContext[AgentDependencies]) -> str:
         request = ctx.deps.request
         skill_block = "\n\n".join(ctx.deps.skill_texts) if ctx.deps.skill_texts else "No extra skills loaded."
-        data_preview = request.data[0].model_dump_json(indent=2) if request.data else "{}"
+        data_preview = build_data_preview(request.data)
+        slack_template_block = request.slack_template or "No Slack template provided."
         return (
             f"Job name: {request.job_name}\n"
             f"Trigger: {request.trigger}\n"
             f"Job prompt: {request.job_prompt or 'None'}\n"
+            f"Slack message template:\n{slack_template_block}\n\n"
             f"Loaded skills:\n{skill_block}\n\n"
             f"Fetched data preview:\n{data_preview}"
         )

@@ -119,6 +119,43 @@ fetch:
 
 For `gh_cli`, the runner executes `gh` from the workspace directory and tries to parse stdout as JSON. If stdout is not JSON, it is stored as plain text instead.
 
+Before fetched data is sent to the model, the runner compacts it for prompt efficiency:
+
+- pretty-printed JSON is removed
+- long strings are truncated
+- large lists are capped to the first 20 items
+- nested content is depth-limited
+
+This keeps large GitHub payloads from overwhelming local model inference.
+
+## Slack Templates
+
+Each job can optionally provide a `slack_template` string. When present, the agent uses that template as the target structure for `slack_message.text`.
+
+Example:
+
+```yaml
+name: github_daily_activity
+prompt: >-
+  Summarize the most important GitHub activity for the requested day.
+slack_template: |-
+  *GitHub Daily Activity - ${GITHUB_ACTIVITY_DATE}*
+  Summary: <one sentence>
+  Highlights:
+  - <highlight 1>
+  - <highlight 2>
+  - <highlight 3>
+skills:
+  - digest
+fetch:
+  type: gh_cli
+  args:
+    - api
+    - users/${GITHUB_USERNAME}/events?per_page=20
+```
+
+The template is advisory rather than a literal text substitution. The model still fills in the content, but it now has a job-specific formatting target.
+
 ## Cron
 
 Example cron entry:

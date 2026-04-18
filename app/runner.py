@@ -38,6 +38,7 @@ async def run_job(job_name: str, trigger: str, dry_run: bool, log_level: str | N
         data=[fetched_data],
         skill_ids=job.skills,
         job_prompt=job.prompt,
+        slack_template=job.slack_template,
     )
 
     logger.info("Building MCP tool configuration")

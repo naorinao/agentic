@@ -19,6 +19,7 @@ class RunRequest(BaseModel):
     data: list[FetchedData]
     skill_ids: list[str] = Field(default_factory=list)
     job_prompt: str | None = None
+    slack_template: str | None = None
 
 
 class SlackMessage(BaseModel):
@@ -71,6 +72,7 @@ class NotifyConfig(BaseModel):
 class JobConfig(BaseModel):
     name: str
     prompt: str | None = None
+    slack_template: str | None = None
     skills: list[str] = Field(default_factory=list)
     fetch: FetchConfig
     mcp: MCPConfig = Field(default_factory=MCPConfig)
