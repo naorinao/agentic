@@ -130,7 +130,7 @@ This keeps large GitHub payloads from overwhelming local model inference.
 
 ## Slack Templates
 
-Each job can optionally provide a `slack_template` string. When present, the agent uses that template as the target structure for `slack_message.text`.
+Each job can optionally provide a structured `slack_template`. When present, the agent must fill `slack_content` using the declared section keys, and the runner validates and renders the final `slack_message.text` deterministically.
 
 Example:
 
@@ -138,13 +138,31 @@ Example:
 name: github_daily_activity
 prompt: >-
   Summarize the most important GitHub activity for the requested day.
-slack_template: |-
-  *GitHub Daily Activity - ${GITHUB_ACTIVITY_DATE}*
-  Summary: <one sentence>
-  Highlights:
-  - <highlight 1>
-  - <highlight 2>
-  - <highlight 3>
+slack_template:
+  title: GitHub Daily Activity - ${GITHUB_ACTIVITY_DATE}
+  tone: concise
+  audience: team
+  sections:
+    - key: overview
+      label: Overview
+      type: paragraph
+      required: true
+      min_chars: 60
+      instruction: Summarize the most important progress in 2-3 sentences.
+    - key: highlights
+      label: Highlights
+      type: bullet_list
+      required: true
+      min_items: 3
+      max_items: 5
+      instruction: List the most important commits, PRs, reviews, or issue progress.
+    - key: next_steps
+      label: Next Steps
+      type: bullet_list
+      required: true
+      min_items: 1
+      max_items: 3
+      instruction: List the next actions worth sharing with the team.
 skills:
   - digest
 fetch:
@@ -154,7 +172,12 @@ fetch:
     - users/${GITHUB_USERNAME}/events?per_page=20
 ```
 
-The template is advisory rather than a literal text substitution. The model still fills in the content, but it now has a job-specific formatting target.
+Supported section types in the MVP are:
+
+- `paragraph`: a single string value, optionally constrained by `min_chars`
+- `bullet_list`: a list of strings, optionally constrained by `min_items` and `max_items`
+
+If the agent returns invalid `slack_content`, the runner fails the job instead of sending a partial Slack message.
 
 ## Cron
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.agent.main import run_agent
 from app.agent.mcp_tools import build_mcp_servers
+from app.agent.slack_templates import finalize_slack_decision
 from app.config import load_job_config, load_settings
 from app.fetchers import fetch_data
 from app.logging_config import configure_logging
@@ -51,6 +52,7 @@ async def run_job(job_name: str, trigger: str, dry_run: bool, log_level: str | N
         workspace_dir=workspace_dir,
         toolsets=mcp_servers,
     )
+    decision = finalize_slack_decision(decision, job.slack_template)
     logger.info("Agent step completed")
 
     print(decision.model_dump_json(indent=2))

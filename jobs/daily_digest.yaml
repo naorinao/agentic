@@ -2,6 +2,31 @@ name: daily_digest
 prompt: >-
   Review the fetched API payload, decide if it is important enough for Slack,
   and prepare a concise message when needed.
+slack_template:
+  title: Daily Digest Demo
+  tone: concise
+  audience: operators
+  sections:
+    - key: overview
+      label: Overview
+      type: paragraph
+      required: true
+      min_chars: 30
+      instruction: Summarize the most important update in 1-2 sentences.
+    - key: highlights
+      label: Highlights
+      type: bullet_list
+      required: true
+      min_items: 2
+      max_items: 3
+      instruction: List the most relevant facts from the fetched payload.
+    - key: next_steps
+      label: Next Steps
+      type: bullet_list
+      required: false
+      min_items: 1
+      max_items: 2
+      instruction: Only include follow-up actions when the payload suggests one.
 skills:
   - default
   - digest
