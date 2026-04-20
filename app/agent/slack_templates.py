@@ -77,6 +77,8 @@ def validate_slack_content(template: SlackTemplate, content: dict[str, str | lis
         if len(items) != len(value):
             errors.append(f"Section '{section.key}' cannot contain empty list items.")
             continue
+        if not items and not section.required:
+            continue
         if section.required and not items:
             errors.append(f"Section '{section.key}' cannot be empty.")
             continue
@@ -103,13 +105,19 @@ def render_slack_message(template: SlackTemplate, content: dict[str, str | list[
         if value is None:
             continue
 
-        lines.append("")
-        lines.append(section.label.strip())
         if section.type == "paragraph":
+            lines.append("")
+            lines.append(section.label.strip())
             lines.append(value.strip())
             continue
 
-        lines.extend(f"- {item.strip()}" for item in value)
+        items = [item.strip() for item in value if item.strip()]
+        if not items:
+            continue
+
+        lines.append("")
+        lines.append(section.label.strip())
+        lines.extend(f"- {item}" for item in items)
 
     return SlackMessage(text="\n".join(lines))
 

@@ -111,6 +111,84 @@ class SlackTemplateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "slack_message.text"):
             finalize_slack_decision(decision, None)
 
+    def test_validate_slack_content_allows_empty_optional_bullet_list_sections(self) -> None:
+        template = SlackTemplate.model_validate(
+            {
+                "title": "Team Daily Report",
+                "sections": [
+                    {
+                        "key": "summary",
+                        "label": "Summary",
+                        "type": "paragraph",
+                        "required": True,
+                        "min_chars": 20,
+                    },
+                    {
+                        "key": "blockers",
+                        "label": "Risks / Blockers",
+                        "type": "bullet_list",
+                        "required": False,
+                        "min_items": 1,
+                        "max_items": 3,
+                    },
+                ],
+            }
+        )
+
+        errors = validate_slack_content(
+            template,
+            {
+                "summary": "Completed the release checklist and unblocked the deployment.",
+                "blockers": [],
+            },
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_finalize_slack_decision_skips_empty_optional_bullet_list_sections(self) -> None:
+        template = SlackTemplate.model_validate(
+            {
+                "title": "Team Daily Report",
+                "sections": [
+                    {
+                        "key": "summary",
+                        "label": "Summary",
+                        "type": "paragraph",
+                        "required": True,
+                        "min_chars": 20,
+                    },
+                    {
+                        "key": "blockers",
+                        "label": "Risks / Blockers",
+                        "type": "bullet_list",
+                        "required": False,
+                        "min_items": 1,
+                        "max_items": 3,
+                    },
+                ],
+            }
+        )
+        decision = AgentDecision.model_validate(
+            {
+                "summary": "This should notify Slack.",
+                "should_notify_slack": True,
+                "slack_content": {
+                    "summary": "Completed the release checklist and unblocked the deployment.",
+                    "blockers": [],
+                },
+                "follow_up_actions": [],
+            }
+        )
+
+        finalized = finalize_slack_decision(decision, template)
+
+        self.assertEqual(
+            finalized.slack_message.text,
+            "*Team Daily Report*\n\n"
+            "Summary\n"
+            "Completed the release checklist and unblocked the deployment.",
+        )
+
     def test_job_config_accepts_structured_slack_template(self) -> None:
         job = JobConfig.model_validate(
             {
