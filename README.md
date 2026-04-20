@@ -139,30 +139,51 @@ name: github_daily_activity
 prompt: >-
   Summarize the most important GitHub activity for the requested day.
 slack_template:
-  title: GitHub Daily Activity - ${GITHUB_ACTIVITY_DATE}
-  tone: concise
+  title: GitHub Daily Report - ${GITHUB_ACTIVITY_DATE}
+  tone: clear and actionable
   audience: team
   sections:
-    - key: overview
-      label: Overview
+    - key: today_summary
+      label: Summary
       type: paragraph
       required: true
       min_chars: 60
-      instruction: Summarize the most important progress in 2-3 sentences.
-    - key: highlights
-      label: Highlights
+      instruction: Summarize the most important outcome of the day in 2-3 sentences and explain why it matters.
+    - key: completed
+      label: Completed Today
       type: bullet_list
       required: true
       min_items: 3
       max_items: 5
-      instruction: List the most important commits, PRs, reviews, or issue progress.
-    - key: next_steps
-      label: Next Steps
+      instruction: Each bullet should include the action, the target, and the result or impact. Prefer concrete commits, PRs, reviews, incidents resolved, or decisions made.
+    - key: impact
+      label: Impact
       type: bullet_list
-      required: true
+      required: false
       min_items: 1
       max_items: 3
-      instruction: List the next actions worth sharing with the team.
+      instruction: Describe how today's work changed delivery, reliability, or team velocity.
+    - key: blockers
+      label: Risks / Blockers
+      type: bullet_list
+      required: false
+      min_items: 1
+      max_items: 3
+      instruction: Include only material blockers or risks. Omit when there is nothing meaningful to report.
+    - key: next_focus
+      label: Next Focus
+      type: bullet_list
+      required: true
+      min_items: 2
+      max_items: 4
+      instruction: List the concrete next actions worth sharing with the team.
+    - key: asks
+      label: Needs Support
+      type: bullet_list
+      required: false
+      min_items: 1
+      max_items: 2
+      instruction: Mention reviews, approvals, or decisions needed from others.
 skills:
   - digest
 fetch:

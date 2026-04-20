@@ -3,30 +3,51 @@ prompt: >-
   Review the fetched API payload, decide if it is important enough for Slack,
   and prepare a concise message when needed.
 slack_template:
-  title: Daily Digest Demo
-  tone: concise
-  audience: operators
+  title: Team Daily Report
+  tone: clear and actionable
+  audience: team
   sections:
-    - key: overview
-      label: Overview
+    - key: today_summary
+      label: Summary
       type: paragraph
       required: true
-      min_chars: 30
-      instruction: Summarize the most important update in 1-2 sentences.
-    - key: highlights
-      label: Highlights
+      min_chars: 60
+      instruction: Summarize the single most important outcome of the day in 2-3 sentences. Focus on delivered results and why they matter.
+    - key: completed
+      label: Completed Today
+      type: bullet_list
+      required: true
+      min_items: 3
+      max_items: 5
+      instruction: Each bullet must include the concrete action, the target object, and the result or impact. Prefer shipped work, merged changes, resolved issues, or decisions made.
+    - key: impact
+      label: Impact
+      type: bullet_list
+      required: false
+      min_items: 1
+      max_items: 3
+      instruction: Describe the user, team, or delivery impact of today's completed work.
+    - key: blockers
+      label: Risks / Blockers
+      type: bullet_list
+      required: false
+      min_items: 1
+      max_items: 3
+      instruction: Include only real blockers or risks. Omit this section when there is nothing material to report.
+    - key: next_focus
+      label: Next Focus
       type: bullet_list
       required: true
       min_items: 2
-      max_items: 3
-      instruction: List the most relevant facts from the fetched payload.
-    - key: next_steps
-      label: Next Steps
+      max_items: 4
+      instruction: List the concrete next actions planned for the next work period.
+    - key: asks
+      label: Needs Support
       type: bullet_list
       required: false
       min_items: 1
       max_items: 2
-      instruction: Only include follow-up actions when the payload suggests one.
+      instruction: Mention approvals, reviews, decisions, or inputs needed from others.
 skills:
   - default
   - digest
