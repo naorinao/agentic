@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from app.schemas import AgentDecision, SlackMessage, SlackTemplate
 
 
@@ -10,9 +12,22 @@ def build_slack_template_prompt(template: SlackTemplate | None) -> str:
             "If you decide to notify Slack, populate slack_message.text directly and leave slack_content as null."
         )
 
+    allowed_keys = [section.key for section in template.sections]
+    example_items: list[str] = []
+    for section in template.sections:
+        if section.type == "paragraph":
+            example_items.append(f'"{section.key}":"..."')
+        else:
+            example_items.append(f'"{section.key}":["..."]')
+    example_shape = "{" + ",".join(example_items) + "}"
+
     lines = [
         "Structured Slack template provided.",
-        "If you decide to notify Slack, populate slack_content using the exact section keys below and leave slack_message as null.",
+        "If you decide to notify Slack, Return slack_content as a JSON object using only the allowed section keys below and leave slack_message as null.",
+        f"Allowed keys: {json.dumps(allowed_keys)}",
+        f"Example shape: {example_shape}",
+        "Do not include template metadata fields like title, tone, audience, or sections inside slack_content.",
+        "Do not nest section objects. Each section key must map directly to a string or a list of strings.",
         f"Title: {template.title}",
     ]
     if template.tone:

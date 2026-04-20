@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+from app.agent.slack_templates import build_slack_template_prompt
 from app.schemas import AgentDecision, JobConfig, SlackTemplate
 from app.agent.slack_templates import finalize_slack_decision, validate_slack_content
 
@@ -220,6 +221,14 @@ class SlackTemplateTests(unittest.TestCase):
         self.assertEqual(job.slack_template.sections[1].min_items, 3)
         self.assertEqual(job.slack_template.sections[1].max_items, 5)
         self.assertTrue(any(skill_id == "digest" for skill_id in job.skills))
+
+    def test_build_slack_template_prompt_warns_against_template_metadata_in_output(self) -> None:
+        prompt = build_slack_template_prompt(self.template)
+
+        self.assertIn("Return slack_content as a JSON object", prompt)
+        self.assertIn("Do not include template metadata fields like title, tone, audience, or sections", prompt)
+        self.assertIn('Allowed keys: ["overview", "highlights", "next_steps"]', prompt)
+        self.assertIn('Example shape: {"overview":"...","highlights":["..."],"next_steps":["..."]}', prompt)
 
 
 if __name__ == "__main__":
