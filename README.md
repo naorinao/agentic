@@ -143,47 +143,13 @@ slack_template:
   tone: clear and actionable
   audience: team
   sections:
-    - key: today_summary
-      label: Summary
-      type: paragraph
-      required: true
-      min_chars: 60
-      instruction: Summarize the most important outcome of the day in 2-3 sentences and explain why it matters.
     - key: completed
-      label: Completed Today
+      label: Today's Work
       type: bullet_list
       required: true
       min_items: 3
-      max_items: 5
-      instruction: Each bullet should include the action, the target, and the result or impact. Prefer concrete commits, PRs, reviews, incidents resolved, or decisions made.
-    - key: impact
-      label: Impact
-      type: bullet_list
-      required: false
-      min_items: 1
-      max_items: 3
-      instruction: Describe how today's work changed delivery, reliability, or team velocity.
-    - key: blockers
-      label: Risks / Blockers
-      type: bullet_list
-      required: false
-      min_items: 1
-      max_items: 3
-      instruction: Include only material blockers or risks. Omit when there is nothing meaningful to report.
-    - key: next_focus
-      label: Next Focus
-      type: bullet_list
-      required: true
-      min_items: 2
-      max_items: 4
-      instruction: List the concrete next actions worth sharing with the team.
-    - key: asks
-      label: Needs Support
-      type: bullet_list
-      required: false
-      min_items: 1
-      max_items: 2
-      instruction: Mention reviews, approvals, or decisions needed from others.
+      max_items: 8
+      instruction: Each bullet should include the action, the target, and the specific outcome. Keep the detail concrete instead of over-summarizing. When the source is GitHub activity, include the GitHub URL in each relevant bullet.
 skills:
   - digest
 fetch:

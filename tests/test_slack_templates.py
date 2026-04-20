@@ -207,19 +207,17 @@ class SlackTemplateTests(unittest.TestCase):
         self.assertEqual(job.slack_template.title, "GitHub Daily Activity")
         self.assertEqual([section.key for section in job.slack_template.sections], ["overview", "highlights", "next_steps"])
 
-    def test_daily_digest_job_uses_richer_daily_report_template(self) -> None:
+    def test_daily_digest_job_uses_single_detailed_work_log_section(self) -> None:
         job_path = Path(__file__).resolve().parents[1] / "jobs" / "daily_digest.yaml"
         job = JobConfig.model_validate(yaml.safe_load(job_path.read_text()))
 
         self.assertIsNotNone(job.slack_template)
-        self.assertEqual(
-            [section.key for section in job.slack_template.sections],
-            ["today_summary", "completed", "impact", "blockers", "next_focus", "asks"],
-        )
+        self.assertEqual([section.key for section in job.slack_template.sections], ["completed"])
         self.assertEqual(job.slack_template.tone, "clear and actionable")
         self.assertEqual(job.slack_template.audience, "team")
-        self.assertEqual(job.slack_template.sections[1].min_items, 3)
-        self.assertEqual(job.slack_template.sections[1].max_items, 5)
+        self.assertEqual(job.slack_template.sections[0].min_items, 3)
+        self.assertEqual(job.slack_template.sections[0].max_items, 8)
+        self.assertIn("GitHub URL", job.slack_template.sections[0].instruction)
         self.assertTrue(any(skill_id == "digest" for skill_id in job.skills))
 
     def test_build_slack_template_prompt_warns_against_template_metadata_in_output(self) -> None:
