@@ -17,7 +17,7 @@ class SlackSectionTemplate(BaseModel):
     key: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     label: str
     type: Literal["paragraph", "bullet_list"]
-    required: bool = True
+    required_level: Literal["hard", "soft"] = "hard"
     instruction: str | None = None
     min_chars: int | None = Field(default=None, ge=1)
     min_items: int | None = Field(default=None, ge=1)
@@ -56,13 +56,37 @@ class SlackTemplate(BaseModel):
 SlackContentValue: TypeAlias = str | list[str]
 
 
+class CompiledSlackSection(BaseModel):
+    key: str
+    label: str
+    type: Literal["paragraph", "bullet_list"]
+    required_level: Literal["hard", "soft"] = "hard"
+    instruction: str | None = None
+    min_chars: int | None = Field(default=None, ge=1)
+    min_items: int | None = Field(default=None, ge=1)
+    max_items: int | None = Field(default=None, ge=1)
+
+
+class CompiledSlackTemplate(BaseModel):
+    title: str
+    sections: list[CompiledSlackSection] = Field(min_length=1)
+    allowed_keys: list[str] = Field(min_length=1)
+    required_keys: list[str] = Field(default_factory=list)
+    prompt_hints: list[str] = Field(default_factory=list)
+
+
+class GeneratedSlackSection(BaseModel):
+    key: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    content: SlackContentValue
+
+
 class RunRequest(BaseModel):
     job_name: str
     trigger: Literal["manual", "cron"]
     data: list[FetchedData]
     skill_ids: list[str] = Field(default_factory=list)
     job_prompt: str | None = None
-    slack_template: SlackTemplate | None = None
+    slack_template: CompiledSlackTemplate | None = None
 
 
 class SlackMessage(BaseModel):
@@ -72,9 +96,9 @@ class SlackMessage(BaseModel):
 class AgentDecision(BaseModel):
     summary: str = Field(description="Short summary of the fetched information.")
     should_notify_slack: bool = Field(description="Whether the runner should post to Slack.")
-    slack_content: dict[str, SlackContentValue] | None = Field(
+    slack_sections: list[GeneratedSlackSection] | None = Field(
         default=None,
-        description="Structured Slack content that matches the configured template when one is provided.",
+        description="Structured Slack sections that match the compiled template contract when one is provided.",
     )
     slack_message: SlackMessage | None = Field(
         default=None,

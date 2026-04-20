@@ -35,9 +35,9 @@ You are a scheduled operations agent.
 Your job is to inspect fetched data, optionally use tools, and return a structured decision.
 Use tools when they can improve correctness.
 Only request a Slack notification when the information is actionable or materially important.
-If you set should_notify_slack to false, leave slack_message and slack_content as null.
+If you set should_notify_slack to false, leave slack_message and slack_sections as null.
 Keep summaries concise and factual.
-When a structured Slack template is provided, populate slack_content using the exact section keys and follow every section rule.
+When a structured Slack template is provided, populate slack_sections using the exact section keys and follow every section rule.
 When no structured Slack template is provided, populate slack_message.text directly if you choose to notify Slack.
 Do not invent fields or sections that are not supported by the fetched data.
 """.strip()
@@ -120,7 +120,7 @@ def build_model(settings: AppSettings):
             custom_output_args={
                 "summary": "Test provider smoke test completed successfully.",
                 "should_notify_slack": False,
-                "slack_content": None,
+                "slack_sections": None,
                 "slack_message": None,
                 "follow_up_actions": ["Install and start Ollama for live model runs."],
             }

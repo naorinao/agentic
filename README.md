@@ -130,7 +130,7 @@ This keeps large GitHub payloads from overwhelming local model inference.
 
 ## Slack Templates
 
-Each job can optionally provide a structured `slack_template`. When present, the agent must fill `slack_content` using the declared section keys, and the runner validates and renders the final `slack_message.text` deterministically.
+Each job can optionally provide a structured `slack_template`. The runner first compiles it into a section contract, then the agent fills `slack_sections` using that contract, and the runner validates and renders the final `slack_message.text` deterministically.
 
 Example:
 
@@ -146,7 +146,7 @@ slack_template:
     - key: completed
       label: Today's Work
       type: bullet_list
-      required: true
+      required_level: hard
       min_items: 3
       max_items: 8
       instruction: Each bullet should include the action, the target, and the specific outcome. Keep the detail concrete instead of over-summarizing. When the source is GitHub activity, include the GitHub URL in each relevant bullet.
@@ -164,7 +164,7 @@ Supported section types in the MVP are:
 - `paragraph`: a single string value, optionally constrained by `min_chars`
 - `bullet_list`: a list of strings, optionally constrained by `min_items` and `max_items`
 
-If the agent returns invalid `slack_content`, the runner fails the job instead of sending a partial Slack message.
+Optional sections may be omitted. If the agent returns invalid `slack_sections` or omits a required section, the runner fails the job instead of sending a malformed Slack message.
 
 ## Cron
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app.agent.main import run_agent
 from app.agent.mcp_tools import build_mcp_servers
-from app.agent.slack_templates import finalize_slack_decision
+from app.agent.slack_templates import compile_slack_template, finalize_slack_decision
 from app.config import load_job_config, load_settings
 from app.fetchers import fetch_data
 from app.logging_config import configure_logging
@@ -33,13 +33,14 @@ async def run_job(job_name: str, trigger: str, dry_run: bool, log_level: str | N
         workspace_dir=workspace_dir,
     )
     logger.info("Fetch step completed source=%s", fetched_data.source)
+    compiled_template = compile_slack_template(job.slack_template)
     run_request = RunRequest(
         job_name=job.name,
         trigger=trigger,
         data=[fetched_data],
         skill_ids=job.skills,
         job_prompt=job.prompt,
-        slack_template=job.slack_template,
+        slack_template=compiled_template,
     )
 
     logger.info("Building MCP tool configuration")
@@ -52,7 +53,7 @@ async def run_job(job_name: str, trigger: str, dry_run: bool, log_level: str | N
         workspace_dir=workspace_dir,
         toolsets=mcp_servers,
     )
-    decision = finalize_slack_decision(decision, job.slack_template)
+    decision = finalize_slack_decision(decision, compiled_template)
     logger.info("Agent step completed")
 
     print(decision.model_dump_json(indent=2))

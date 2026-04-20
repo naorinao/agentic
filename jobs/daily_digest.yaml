@@ -10,7 +10,7 @@ slack_template:
     - key: completed
       label: Today's Work
       type: bullet_list
-      required: true
+      required_level: hard
       min_items: 3
       max_items: 8
       instruction: List the concrete things completed today. Each bullet should include the action, the object worked on, and the specific outcome. Do not over-compress the details. When the source is GitHub activity, include the GitHub URL in each relevant bullet.

@@ -5,9 +5,8 @@ from pathlib import Path
 
 import yaml
 
-from app.agent.slack_templates import build_slack_template_prompt
-from app.schemas import AgentDecision, JobConfig, SlackTemplate
-from app.agent.slack_templates import finalize_slack_decision, validate_slack_content
+from app.agent.slack_templates import build_slack_template_prompt, compile_slack_template, finalize_slack_decision
+from app.schemas import AgentDecision, GeneratedSlackSection, JobConfig, SlackTemplate
 
 
 class SlackTemplateTests(unittest.TestCase):
@@ -22,7 +21,7 @@ class SlackTemplateTests(unittest.TestCase):
                         "key": "overview",
                         "label": "Overview",
                         "type": "paragraph",
-                        "required": True,
+                        "required_level": "hard",
                         "min_chars": 20,
                         "instruction": "Summarize the most important progress in 2-3 sentences.",
                     },
@@ -30,7 +29,7 @@ class SlackTemplateTests(unittest.TestCase):
                         "key": "highlights",
                         "label": "Highlights",
                         "type": "bullet_list",
-                        "required": True,
+                        "required_level": "hard",
                         "min_items": 2,
                         "max_items": 4,
                         "instruction": "List the most important PRs, commits, or reviews.",
@@ -39,7 +38,7 @@ class SlackTemplateTests(unittest.TestCase):
                         "key": "next_steps",
                         "label": "Next Steps",
                         "type": "bullet_list",
-                        "required": True,
+                        "required_level": "soft",
                         "min_items": 1,
                         "max_items": 2,
                         "instruction": "List the next actions worth sharing.",
@@ -47,45 +46,43 @@ class SlackTemplateTests(unittest.TestCase):
                 ],
             }
         )
+        self.compiled_template = compile_slack_template(self.template)
 
-    def test_validate_slack_content_reports_template_violations(self) -> None:
-        errors = validate_slack_content(
-            self.template,
-            {
-                "overview": "Too short",
-                "highlights": ["Only one item"],
-                "unexpected": "extra section",
-            },
-        )
-
-        self.assertEqual(
-            errors,
-            [
-                "Section 'overview' must be at least 20 characters.",
-                "Section 'highlights' must contain at least 2 items.",
-                "Missing required section 'next_steps'.",
-                "Unknown slack_content sections: unexpected.",
-            ],
-        )
+    def test_compile_slack_template_exposes_contract_and_prompt_hints(self) -> None:
+        self.assertEqual(self.compiled_template.title, "GitHub Daily Activity")
+        self.assertEqual([section.key for section in self.compiled_template.sections], ["overview", "highlights", "next_steps"])
+        self.assertEqual(self.compiled_template.required_keys, ["overview", "highlights"])
+        self.assertEqual(self.compiled_template.sections[2].required_level, "soft")
+        self.assertIn("Tone: concise", self.compiled_template.prompt_hints)
+        self.assertIn("Audience: team", self.compiled_template.prompt_hints)
 
     def test_finalize_slack_decision_renders_template_in_order(self) -> None:
         decision = AgentDecision.model_validate(
             {
                 "summary": "GitHub activity is worth notifying the team about.",
                 "should_notify_slack": True,
-                "slack_content": {
-                    "overview": "Completed the release prep, merged two reviews, and cleared the flaky CI blocker.",
-                    "highlights": [
-                        "Merged the deployment checklist cleanup PR.",
-                        "Closed the flaky CI issue after updating the retry logic.",
-                    ],
-                    "next_steps": ["Prepare the release notes draft before tomorrow morning."],
-                },
+                "slack_sections": [
+                    {
+                        "key": "overview",
+                        "content": "Completed the release prep, merged two reviews, and cleared the flaky CI blocker.",
+                    },
+                    {
+                        "key": "highlights",
+                        "content": [
+                            "Merged the deployment checklist cleanup PR.",
+                            "Closed the flaky CI issue after updating the retry logic.",
+                        ],
+                    },
+                    {
+                        "key": "next_steps",
+                        "content": ["Prepare the release notes draft before tomorrow morning."],
+                    },
+                ],
                 "follow_up_actions": [],
             }
         )
 
-        finalized = finalize_slack_decision(decision, self.template)
+        finalized = finalize_slack_decision(decision, self.compiled_template)
 
         self.assertIsNotNone(finalized.slack_message)
         self.assertEqual(
@@ -99,7 +96,7 @@ class SlackTemplateTests(unittest.TestCase):
             "Next Steps\n"
             "- Prepare the release notes draft before tomorrow morning.",
         )
-
+    
     def test_finalize_slack_decision_requires_plain_text_without_template(self) -> None:
         decision = AgentDecision.model_validate(
             {
@@ -112,7 +109,7 @@ class SlackTemplateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "slack_message.text"):
             finalize_slack_decision(decision, None)
 
-    def test_validate_slack_content_allows_empty_optional_bullet_list_sections(self) -> None:
+    def test_finalize_slack_decision_skips_missing_optional_sections(self) -> None:
         template = SlackTemplate.model_validate(
             {
                 "title": "Team Daily Report",
@@ -121,67 +118,36 @@ class SlackTemplateTests(unittest.TestCase):
                         "key": "summary",
                         "label": "Summary",
                         "type": "paragraph",
-                        "required": True,
+                        "required_level": "hard",
                         "min_chars": 20,
                     },
                     {
                         "key": "blockers",
                         "label": "Risks / Blockers",
                         "type": "bullet_list",
-                        "required": False,
+                        "required_level": "soft",
                         "min_items": 1,
                         "max_items": 3,
                     },
                 ],
             }
         )
-
-        errors = validate_slack_content(
-            template,
-            {
-                "summary": "Completed the release checklist and unblocked the deployment.",
-                "blockers": [],
-            },
-        )
-
-        self.assertEqual(errors, [])
-
-    def test_finalize_slack_decision_skips_empty_optional_bullet_list_sections(self) -> None:
-        template = SlackTemplate.model_validate(
-            {
-                "title": "Team Daily Report",
-                "sections": [
-                    {
-                        "key": "summary",
-                        "label": "Summary",
-                        "type": "paragraph",
-                        "required": True,
-                        "min_chars": 20,
-                    },
-                    {
-                        "key": "blockers",
-                        "label": "Risks / Blockers",
-                        "type": "bullet_list",
-                        "required": False,
-                        "min_items": 1,
-                        "max_items": 3,
-                    },
-                ],
-            }
-        )
+        compiled_template = compile_slack_template(template)
         decision = AgentDecision.model_validate(
             {
                 "summary": "This should notify Slack.",
                 "should_notify_slack": True,
-                "slack_content": {
-                    "summary": "Completed the release checklist and unblocked the deployment.",
-                    "blockers": [],
-                },
+                "slack_sections": [
+                    {
+                        "key": "summary",
+                        "content": "Completed the release checklist and unblocked the deployment.",
+                    }
+                ],
                 "follow_up_actions": [],
             }
         )
 
-        finalized = finalize_slack_decision(decision, template)
+        finalized = finalize_slack_decision(decision, compiled_template)
 
         self.assertEqual(
             finalized.slack_message.text,
@@ -189,6 +155,24 @@ class SlackTemplateTests(unittest.TestCase):
             "Summary\n"
             "Completed the release checklist and unblocked the deployment.",
         )
+
+    def test_finalize_slack_decision_requires_hard_sections_from_contract(self) -> None:
+        decision = AgentDecision.model_validate(
+            {
+                "summary": "This should notify Slack.",
+                "should_notify_slack": True,
+                "slack_sections": [
+                    {
+                        "key": "overview",
+                        "content": "Completed the release prep, merged two reviews, and cleared the flaky CI blocker.",
+                    }
+                ],
+                "follow_up_actions": [],
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "Missing required section 'highlights'"):
+            finalize_slack_decision(decision, self.compiled_template)
 
     def test_job_config_accepts_structured_slack_template(self) -> None:
         job = JobConfig.model_validate(
@@ -217,16 +201,18 @@ class SlackTemplateTests(unittest.TestCase):
         self.assertEqual(job.slack_template.audience, "team")
         self.assertEqual(job.slack_template.sections[0].min_items, 3)
         self.assertEqual(job.slack_template.sections[0].max_items, 8)
+        self.assertEqual(job.slack_template.sections[0].required_level, "hard")
         self.assertIn("GitHub URL", job.slack_template.sections[0].instruction)
         self.assertTrue(any(skill_id == "digest" for skill_id in job.skills))
 
     def test_build_slack_template_prompt_warns_against_template_metadata_in_output(self) -> None:
-        prompt = build_slack_template_prompt(self.template)
+        prompt = build_slack_template_prompt(self.compiled_template)
 
-        self.assertIn("Return slack_content as a JSON object", prompt)
-        self.assertIn("Do not include template metadata fields like title, tone, audience, or sections", prompt)
+        self.assertIn("Return slack_sections as a JSON array", prompt)
+        self.assertIn("Do not include template metadata fields like title, tone, audience, sections, or required_keys", prompt)
         self.assertIn('Allowed keys: ["overview", "highlights", "next_steps"]', prompt)
-        self.assertIn('Example shape: {"overview":"...","highlights":["..."],"next_steps":["..."]}', prompt)
+        self.assertIn('Required keys: ["overview", "highlights"]', prompt)
+        self.assertIn('Example shape: [{"key":"overview","content":"..."}', prompt)
 
 
 if __name__ == "__main__":
