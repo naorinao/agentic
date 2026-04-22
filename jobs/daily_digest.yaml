@@ -1,22 +1,8 @@
 name: daily_digest
-prompt: >-
-  Review the fetched API payload, decide if it is important enough for Slack,
-  and prepare a concise message when needed.
-slack_template:
-  title: Team Daily Report
-  tone: clear and actionable
-  audience: team
-  sections:
-    - key: completed
-      label: Today's Work
-      type: bullet_list
-      required_level: hard
-      min_items: 3
-      max_items: 8
-      instruction: List the concrete things completed today. Each bullet should include the action, the object worked on, and the specific outcome. Do not over-compress the details. When the source is GitHub activity, include the GitHub URL in each relevant bullet.
 skills:
   - default
   - digest
+  - daily_digest_task
 fetch:
   type: http_api
   url: https://jsonplaceholder.typicode.com/todos/1

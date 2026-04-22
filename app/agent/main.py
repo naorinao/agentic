@@ -15,7 +15,6 @@ from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agent.skills import load_skill_texts
-from app.agent.slack_templates import build_slack_template_prompt
 from app.config import AppSettings
 from app.schemas import AgentDecision, FetchedData, RunRequest
 from app.tools.local_script import run_local_script
@@ -35,11 +34,10 @@ You are a scheduled operations agent.
 Your job is to inspect fetched data, optionally use tools, and return a structured decision.
 Use tools when they can improve correctness.
 Only request a Slack notification when the information is actionable or materially important.
-If you set should_notify_slack to false, leave slack_message and slack_sections as null.
+If you set should_notify_slack to false, leave slack_message as null.
 Keep summaries concise and factual.
-When a structured Slack template is provided, populate slack_sections using the exact section keys and follow every section rule.
-When no structured Slack template is provided, populate slack_message.text directly if you choose to notify Slack.
-Do not invent fields or sections that are not supported by the fetched data.
+If you choose to notify Slack, populate slack_message.text directly as readable plain text.
+Do not invent fields that are not supported by the fetched data.
 """.strip()
 
 
@@ -120,7 +118,6 @@ def build_model(settings: AppSettings):
             custom_output_args={
                 "summary": "Test provider smoke test completed successfully.",
                 "should_notify_slack": False,
-                "slack_sections": None,
                 "slack_message": None,
                 "follow_up_actions": ["Install and start Ollama for live model runs."],
             }
@@ -144,12 +141,10 @@ def create_agent(settings: AppSettings, toolsets: list[object]) -> Agent[AgentDe
         request = ctx.deps.request
         skill_block = "\n\n".join(ctx.deps.skill_texts) if ctx.deps.skill_texts else "No extra skills loaded."
         data_preview = build_data_preview(request.data)
-        slack_template_block = build_slack_template_prompt(request.slack_template)
         return (
             f"Job name: {request.job_name}\n"
             f"Trigger: {request.trigger}\n"
             f"Job prompt: {request.job_prompt or 'None'}\n"
-            f"Slack output contract:\n{slack_template_block}\n\n"
             f"Loaded skills:\n{skill_block}\n\n"
             f"Fetched data preview:\n{data_preview}"
         )

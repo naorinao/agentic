@@ -128,29 +128,16 @@ Before fetched data is sent to the model, the runner compacts it for prompt effi
 
 This keeps large GitHub payloads from overwhelming local model inference.
 
-## Slack Templates
+## Skills
 
-Each job can optionally provide a structured `slack_template`. The runner first compiles it into a section contract, then the agent fills `slack_sections` using that contract, and the runner validates and renders the final `slack_message.text` deterministically.
+This repo uses `skills/*.md` as reusable instruction fragments. Put task-specific behavior in a skill file and attach it to the job through `skills:`. This keeps job YAML small and avoids the brittle structured `slack_template` contract.
 
 Example:
 
 ```yaml
 name: github_daily_activity
-prompt: >-
-  Summarize the most important GitHub activity for the requested day.
-slack_template:
-  title: GitHub Daily Report - ${GITHUB_ACTIVITY_DATE}
-  tone: clear and actionable
-  audience: team
-  sections:
-    - key: completed
-      label: Today's Work
-      type: bullet_list
-      required_level: hard
-      min_items: 3
-      max_items: 8
-      instruction: Each bullet should include the action, the target, and the specific outcome. Keep the detail concrete instead of over-summarizing. When the source is GitHub activity, include the GitHub URL in each relevant bullet.
 skills:
+  - github_daily_activity_task
   - digest
 fetch:
   type: gh_cli
@@ -159,12 +146,13 @@ fetch:
     - users/${GITHUB_USERNAME}/events?per_page=20
 ```
 
-Supported section types in the MVP are:
+When the agent decides to notify Slack, it should populate `slack_message.text` directly. The runner validates that plain-text message exists before delivery.
 
-- `paragraph`: a single string value, optionally constrained by `min_chars`
-- `bullet_list`: a list of strings, optionally constrained by `min_items` and `max_items`
+Typical pattern:
 
-Optional sections may be omitted. If the agent returns invalid `slack_sections` or omits a required section, the runner fails the job instead of sending a malformed Slack message.
+- `skills/default.md`: shared operating rules
+- `skills/digest.md`: reusable formatting heuristics
+- `skills/<job>_task.md`: the task contract for one concrete job
 
 ## Cron
 

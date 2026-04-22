@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, HttpUrl, model_validator
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class FetchedData(BaseModel):
@@ -13,80 +13,12 @@ class FetchedData(BaseModel):
     text_summary: str | None = None
 
 
-class SlackSectionTemplate(BaseModel):
-    key: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
-    label: str
-    type: Literal["paragraph", "bullet_list"]
-    required_level: Literal["hard", "soft"] = "hard"
-    instruction: str | None = None
-    min_chars: int | None = Field(default=None, ge=1)
-    min_items: int | None = Field(default=None, ge=1)
-    max_items: int | None = Field(default=None, ge=1)
-
-    @model_validator(mode="after")
-    def validate_section_rules(self) -> "SlackSectionTemplate":
-        if self.type == "paragraph":
-            if self.min_items is not None or self.max_items is not None:
-                raise ValueError("paragraph sections cannot define min_items or max_items")
-            return self
-
-        if self.min_chars is not None:
-            raise ValueError("bullet_list sections cannot define min_chars")
-        if self.min_items is not None and self.max_items is not None and self.min_items > self.max_items:
-            raise ValueError("min_items cannot be greater than max_items")
-        return self
-
-
-class SlackTemplate(BaseModel):
-    title: str
-    tone: str | None = None
-    audience: str | None = None
-    sections: list[SlackSectionTemplate] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_unique_keys(self) -> "SlackTemplate":
-        keys = [section.key for section in self.sections]
-        duplicate_keys = sorted({key for key in keys if keys.count(key) > 1})
-        if duplicate_keys:
-            duplicates = ", ".join(duplicate_keys)
-            raise ValueError(f"slack template section keys must be unique: {duplicates}")
-        return self
-
-
-SlackContentValue: TypeAlias = str | list[str]
-
-
-class CompiledSlackSection(BaseModel):
-    key: str
-    label: str
-    type: Literal["paragraph", "bullet_list"]
-    required_level: Literal["hard", "soft"] = "hard"
-    instruction: str | None = None
-    min_chars: int | None = Field(default=None, ge=1)
-    min_items: int | None = Field(default=None, ge=1)
-    max_items: int | None = Field(default=None, ge=1)
-
-
-class CompiledSlackTemplate(BaseModel):
-    title: str
-    sections: list[CompiledSlackSection] = Field(min_length=1)
-    allowed_keys: list[str] = Field(min_length=1)
-    required_keys: list[str] = Field(default_factory=list)
-    prompt_hints: list[str] = Field(default_factory=list)
-
-
-class GeneratedSlackSection(BaseModel):
-    key: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
-    content: SlackContentValue
-
-
 class RunRequest(BaseModel):
     job_name: str
     trigger: Literal["manual", "cron"]
     data: list[FetchedData]
     skill_ids: list[str] = Field(default_factory=list)
     job_prompt: str | None = None
-    slack_template: CompiledSlackTemplate | None = None
 
 
 class SlackMessage(BaseModel):
@@ -96,13 +28,9 @@ class SlackMessage(BaseModel):
 class AgentDecision(BaseModel):
     summary: str = Field(description="Short summary of the fetched information.")
     should_notify_slack: bool = Field(description="Whether the runner should post to Slack.")
-    slack_sections: list[GeneratedSlackSection] | None = Field(
-        default=None,
-        description="Structured Slack sections that match the compiled template contract when one is provided.",
-    )
     slack_message: SlackMessage | None = Field(
         default=None,
-        description="Plain-text Slack webhook payload to send when no structured template is configured.",
+        description="Plain-text Slack webhook payload to send when notifying Slack.",
     )
     follow_up_actions: list[str] = Field(default_factory=list)
 
@@ -143,7 +71,6 @@ class NotifyConfig(BaseModel):
 class JobConfig(BaseModel):
     name: str
     prompt: str | None = None
-    slack_template: SlackTemplate | None = None
     skills: list[str] = Field(default_factory=list)
     fetch: FetchConfig
     mcp: MCPConfig = Field(default_factory=MCPConfig)
