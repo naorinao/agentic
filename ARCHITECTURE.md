@@ -46,7 +46,7 @@ This document captures the current repository architecture based on the implemen
 </style>
 <div class="arch-diagram">
 <div class="arch-title">Scheduled Agent MVP</div>
-<div class="arch-subtitle">Current architecture derived from <code>app/runner.py</code>, agent modules, fetchers, tools, job YAML, and skill files after removing the structured Slack template path.</div>
+<div class="arch-subtitle">Current architecture derived from <code>app/runner.py</code>, agent modules, fetchers, tools, optional fetch jobs, and skill packages with bundled scripts.</div>
 <div class="arch-wrapper">
 <div class="arch-sidebar">
 <div class="arch-sidebar-panel">
@@ -79,10 +79,10 @@ This document captures the current repository architecture based on the implemen
 <div class="arch-layer application">
 <div class="arch-layer-title">Application Layer</div>
 <div class="arch-grid arch-grid-4">
-<div class="arch-box highlight"><code>app.runner.run_job</code><br><small>Main orchestration entry point for settings, fetch, agent run, plain-text Slack validation, and notification</small></div>
+<div class="arch-box highlight"><code>app.runner.run_job</code><br><small>Main orchestration entry point for optional fetch, agent run, plain-text Slack validation, and notification</small></div>
 <div class="arch-box"><code>load_settings()</code><br><small>Loads environment-backed application settings</small></div>
 <div class="arch-box"><code>load_job_config()</code><br><small>Loads and validates <code>jobs/*.yaml</code></small></div>
-<div class="arch-box"><code>fetch_data()</code><br><small>Dispatches to <code>http_api</code> or <code>gh_cli</code> fetchers</small></div>
+<div class="arch-box"><code>fetch_data()</code><br><small>Dispatches to <code>http_api</code> or <code>gh_cli</code> when the job config includes a fetch step</small></div>
 </div>
 <div class="arch-subgroup">
 <div class="arch-subgroup-box">
@@ -95,8 +95,8 @@ This document captures the current repository architecture based on the implemen
 <div class="arch-subgroup-box">
 <div class="arch-subgroup-title">Job Definition</div>
 <div class="arch-grid arch-grid-2">
-<div class="arch-box tech"><code>jobs/daily_digest.yaml</code><br><small>Fetch config, skill list, MCP config, notification settings</small></div>
-<div class="arch-box tech"><code>skills/default.md</code> + task skill<br><small>Reusable base rules plus job-specific task contract</small></div>
+<div class="arch-box tech"><code>jobs/daily_digest.yaml</code><br><small>Classic fetch-driven job with skill list, MCP config, and notification settings</small></div>
+<div class="arch-box tech"><code>jobs/github_daily_activity.yaml</code><br><small>Pure skill-driven job with prompt, skill list, and no fetch block</small></div>
 </div>
 </div>
 </div>
@@ -106,22 +106,23 @@ This document captures the current repository architecture based on the implemen
 <div class="arch-grid arch-grid-3">
 <div class="arch-box highlight"><code>create_agent()</code> and <code>run_agent()</code><br><small>PydanticAI agent loop with structured <code>AgentDecision</code> output</small></div>
 <div class="arch-box">Model Routing<br><small>Supports <code>ollama</code>, <code>openai-compatible</code>, and <code>test</code></small></div>
-<div class="arch-box">Context Injection<br><small>Combines base instructions, optional job prompt, loaded skill texts, and fetched data preview</small></div>
+<div class="arch-box">Context Injection<br><small>Combines base instructions, optional job prompt, loaded skill package content, and fetched data preview</small></div>
 </div>
 <div class="arch-subgroup">
 <div class="arch-subgroup-box">
 <div class="arch-subgroup-title">Skill Loading</div>
 <div class="arch-grid arch-grid-3">
-<div class="arch-box tech"><code>load_skill_texts()</code><br><small>Reads <code>skills/*.md</code> selected by the job</small></div>
-<div class="arch-box tech"><code>default.md</code><br><small>Shared operating rules across jobs</small></div>
-<div class="arch-box tech"><code>daily_digest_task.md</code><br><small>Task contract now lives in a skill instead of a Slack template</small></div>
+<div class="arch-box tech"><code>load_skills()</code><br><small>Loads <code>skills/&lt;id&gt;/SKILL.md</code> packages selected by the job</small></div>
+<div class="arch-box tech"><code>skills/default/SKILL.md</code><br><small>Shared operating rules across jobs</small></div>
+<div class="arch-box tech"><code>skills/github_daily_activity/</code><br><small>Task contract plus bundled GitHub fetch script</small></div>
 </div>
 </div>
 <div class="arch-subgroup-box">
 <div class="arch-subgroup-title">Built-in Agent Tools</div>
-<div class="arch-grid arch-grid-2">
+<div class="arch-grid arch-grid-3">
 <div class="arch-box tech"><code>format_slack_message</code><br><small>Builds readable plain-text Slack messages</small></div>
 <div class="arch-box tech"><code>run_workspace_script</code><br><small>Runs helper scripts only under the allowed workspace directory</small></div>
+<div class="arch-box tech"><code>run_skill_script</code><br><small>Runs bundled scripts only from loaded skill packages and parses JSON stdout</small></div>
 </div>
 </div>
 </div>
@@ -151,8 +152,8 @@ This document captures the current repository architecture based on the implemen
 <div class="arch-subgroup-title">Configuration Assets</div>
 <div class="arch-grid arch-grid-3">
 <div class="arch-box tech"><code>.env</code><br><small>Model provider, endpoint, API key, timeouts, webhook URL</small></div>
-<div class="arch-box tech"><code>jobs/*.yaml</code><br><small>Fetch, MCP, notification, and ordered skill references</small></div>
-<div class="arch-box tech"><code>skills/*.md</code><br><small>Base, formatting, and task-specific instruction fragments loaded into agent context</small></div>
+<div class="arch-box tech"><code>jobs/*.yaml</code><br><small>Optional fetch, MCP, notification, prompt, and ordered skill references</small></div>
+<div class="arch-box tech"><code>skills/&lt;id&gt;/SKILL.md</code><br><small>Package metadata, instructions, and optional bundled scripts</small></div>
 </div>
 </div>
 </div>
@@ -163,14 +164,14 @@ This document captures the current repository architecture based on the implemen
 <div class="arch-box">Python 3.11 Runtime<br><small>Async application execution</small></div>
 <div class="arch-box">Pydantic and Settings<br><small>Validation and environment-backed configuration</small></div>
 <div class="arch-box"><code>httpx</code> Async Networking<br><small>Used for both fetch and Slack webhook delivery</small></div>
-<div class="arch-box">Workspace and Scripts<br><small>Controlled local execution boundary under <code>ALLOWED_SCRIPT_DIR</code></small></div>
+<div class="arch-box">Workspace and Scripts<br><small>Controlled execution boundary for workspace scripts and skill-scoped scripts</small></div>
 </div>
 </div>
 <div class="arch-layer external">
 <div class="arch-layer-title">External Services</div>
 <div class="arch-grid arch-grid-3">
 <div class="arch-box">LLM Provider Endpoint<br><small>Ollama or OpenAI-compatible API</small></div>
-<div class="arch-box">Source HTTP API<br><small>Current demo job uses <code>jsonplaceholder.typicode.com</code></small></div>
+<div class="arch-box">Source APIs<br><small>HTTP APIs, GitHub API via <code>gh</code>, or no external fetch for pure skill-driven jobs</small></div>
 <div class="arch-box">Slack Webhook API<br><small>Receives notifications only when the decision requires it</small></div>
 </div>
 </div>
@@ -179,13 +180,13 @@ This document captures the current repository architecture based on the implemen
 <div class="arch-sidebar-panel">
 <div class="arch-sidebar-title">Controls</div>
 <div class="arch-sidebar-item">Structured output still enforces a typed decision contract, but Slack content is now plain text</div>
-<div class="arch-sidebar-item">Script execution is restricted to the configured allowed directory</div>
+<div class="arch-sidebar-item">Script execution is restricted to the configured workspace directory or the loaded skill package's <code>scripts/</code> directory</div>
 <div class="arch-sidebar-item">MCP transport can be local stdio or streamable HTTP</div>
 </div>
 <div class="arch-sidebar-panel">
 <div class="arch-sidebar-title">Design Notes</div>
 <div class="arch-sidebar-item metric">Conservative Slack Policy</div>
-<div class="arch-sidebar-item">Task behavior is defined by ordered skills, not by a separate Slack template compiler</div>
+<div class="arch-sidebar-item">Task behavior is defined by ordered skill packages, and pure skill-driven jobs can collect their own data</div>
 <div class="arch-sidebar-item">MCP tools provide deterministic scoring to complement model judgment</div>
 </div>
 </div>

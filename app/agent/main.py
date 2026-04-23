@@ -14,18 +14,28 @@ from pydantic_ai.profiles.openai import OpenAIModelProfile
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from app.agent.skills import load_skill_texts
+from app.agent.skills import LoadedSkill, build_skill_prompt, load_skills
 from app.config import AppSettings
 from app.schemas import AgentDecision, FetchedData, RunRequest
 from app.tools.local_script import run_local_script
+from app.tools.skill_script import run_skill_script_dir
 
 
 logger = logging.getLogger(__name__)
 
-MAX_PREVIEW_CHARS = 12000
+MAX_PREVIEW_CHARS = 24000
 MAX_LIST_ITEMS = 20
 MAX_STRING_CHARS = 500
 MAX_NESTED_DEPTH = 6
+PREVIEW_LIMIT_PROFILES = (
+    (20, 500, 6),
+    (12, 350, 5),
+    (8, 240, 4),
+    (5, 160, 3),
+    (3, 96, 2),
+    (2, 64, 2),
+    (1, 48, 1),
+)
 
 
 BASE_INSTRUCTIONS = """
@@ -33,6 +43,7 @@ You are a scheduled operations agent.
 
 Your job is to inspect fetched data, optionally use tools, and return a structured decision.
 Use tools when they can improve correctness.
+If the job loads skill scripts that can fetch or enrich data, use them when needed.
 Only request a Slack notification when the information is actionable or materially important.
 If you set should_notify_slack to false, leave slack_message as null.
 Keep summaries concise and factual.
@@ -46,52 +57,139 @@ class AgentDependencies:
     request: RunRequest
     workspace_dir: Path
     allowed_script_dir: Path
-    skill_texts: list[str]
+    loaded_skills: list[LoadedSkill]
 
 
-def _shrink_for_prompt(value: Any, depth: int = 0) -> Any:
-    if depth >= MAX_NESTED_DEPTH:
+def _shrink_for_prompt(
+    value: Any,
+    *,
+    max_list_items: int,
+    max_string_chars: int,
+    max_nested_depth: int,
+    depth: int = 0,
+) -> Any:
+    if depth >= max_nested_depth:
         return "<truncated nested content>"
 
     if isinstance(value, dict):
-        return {key: _shrink_for_prompt(item, depth + 1) for key, item in value.items()}
+        return {
+            key: _shrink_for_prompt(
+                item,
+                max_list_items=max_list_items,
+                max_string_chars=max_string_chars,
+                max_nested_depth=max_nested_depth,
+                depth=depth + 1,
+            )
+            for key, item in value.items()
+        }
 
     if isinstance(value, list):
-        kept_items = [_shrink_for_prompt(item, depth + 1) for item in value[:MAX_LIST_ITEMS]]
+        kept_items = [
+            _shrink_for_prompt(
+                item,
+                max_list_items=max_list_items,
+                max_string_chars=max_string_chars,
+                max_nested_depth=max_nested_depth,
+                depth=depth + 1,
+            )
+            for item in value[:max_list_items]
+        ]
         remaining_items = len(value) - len(kept_items)
         if remaining_items > 0:
             kept_items.append(f"<truncated {remaining_items} more items>")
         return kept_items
 
-    if isinstance(value, str) and len(value) > MAX_STRING_CHARS:
-        return f"{value[:MAX_STRING_CHARS]}<truncated {len(value) - MAX_STRING_CHARS} chars>"
+    if isinstance(value, str) and len(value) > max_string_chars:
+        return f"{value[:max_string_chars]}<truncated {len(value) - max_string_chars} chars>"
 
     return value
 
 
-def build_data_preview(data: list[FetchedData]) -> str:
+def _build_compact_items(
+    data: list[FetchedData],
+    *,
+    max_list_items: int,
+    max_string_chars: int,
+    max_nested_depth: int,
+) -> list[dict[str, Any]]:
     compact_items = []
     for item in data:
         compact_items.append(
             {
                 "source": item.source,
                 "fetched_at": item.fetched_at.isoformat(),
-                "text_summary": item.text_summary,
-                "payload": _shrink_for_prompt(item.payload),
+                "text_summary": _shrink_for_prompt(
+                    item.text_summary,
+                    max_list_items=max_list_items,
+                    max_string_chars=max_string_chars,
+                    max_nested_depth=max_nested_depth,
+                ),
+                "payload": _shrink_for_prompt(
+                    item.payload,
+                    max_list_items=max_list_items,
+                    max_string_chars=max_string_chars,
+                    max_nested_depth=max_nested_depth,
+                ),
+            }
+        )
+    return compact_items
+
+
+def _build_minimal_preview(data: list[FetchedData]) -> str:
+    compact_items = []
+    for item in data:
+        compact_items.append(
+            {
+                "source": item.source,
+                "fetched_at": item.fetched_at.isoformat(),
+                "text_summary": _shrink_for_prompt(
+                    item.text_summary,
+                    max_list_items=1,
+                    max_string_chars=48,
+                    max_nested_depth=1,
+                ),
+                "payload": "<payload omitted after preview budget>",
             }
         )
 
-    preview = json.dumps(compact_items, ensure_ascii=True, separators=(",", ":")) if compact_items else "[]"
-    if len(preview) > MAX_PREVIEW_CHARS:
-        logger.info(
-            "Trimmed agent data preview from chars=%s to chars=%s",
-            len(preview),
-            MAX_PREVIEW_CHARS,
-        )
-        return f"{preview[:MAX_PREVIEW_CHARS]}...<truncated {len(preview) - MAX_PREVIEW_CHARS} chars>"
+    return json.dumps(compact_items, ensure_ascii=True, separators=(",", ":")) if compact_items else "[]"
 
-    logger.info("Prepared agent data preview chars=%s", len(preview))
-    return preview
+
+def build_data_preview(data: list[FetchedData]) -> str:
+    last_preview = "[]"
+    for max_list_items, max_string_chars, max_nested_depth in PREVIEW_LIMIT_PROFILES:
+        compact_items = _build_compact_items(
+            data,
+            max_list_items=max_list_items,
+            max_string_chars=max_string_chars,
+            max_nested_depth=max_nested_depth,
+        )
+        preview = json.dumps(compact_items, ensure_ascii=True, separators=(",", ":")) if compact_items else "[]"
+        last_preview = preview
+        if len(preview) <= MAX_PREVIEW_CHARS:
+            if (max_list_items, max_string_chars, max_nested_depth) != PREVIEW_LIMIT_PROFILES[0]:
+                logger.info(
+                    "Compressed agent data preview to chars=%s using list_items=%s string_chars=%s nested_depth=%s",
+                    len(preview),
+                    max_list_items,
+                    max_string_chars,
+                    max_nested_depth,
+                )
+            else:
+                logger.info("Prepared agent data preview chars=%s", len(preview))
+            return preview
+
+    preview = _build_minimal_preview(data)
+    if len(preview) <= MAX_PREVIEW_CHARS:
+        logger.info("Fell back to minimal agent data preview chars=%s", len(preview))
+        return preview
+
+    logger.info(
+        "Minimal agent data preview still exceeded budget chars=%s limit=%s; returning smallest valid preview",
+        len(preview),
+        MAX_PREVIEW_CHARS,
+    )
+    return preview if len(preview) <= len(last_preview) else last_preview
 
 
 def build_model(settings: AppSettings):
@@ -139,7 +237,7 @@ def create_agent(settings: AppSettings, toolsets: list[object]) -> Agent[AgentDe
     @agent.instructions
     def inject_context(ctx: RunContext[AgentDependencies]) -> str:
         request = ctx.deps.request
-        skill_block = "\n\n".join(ctx.deps.skill_texts) if ctx.deps.skill_texts else "No extra skills loaded."
+        skill_block = build_skill_prompt(ctx.deps.loaded_skills)
         data_preview = build_data_preview(request.data)
         return (
             f"Job name: {request.job_name}\n"
@@ -174,6 +272,26 @@ def create_agent(settings: AppSettings, toolsets: list[object]) -> Agent[AgentDe
             args=args,
         )
 
+    @agent.tool
+    async def run_skill_script(
+        ctx: RunContext[AgentDependencies],
+        skill_id: str,
+        script_name: str,
+        args: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run a script from one of the loaded skill packages and return parsed stdout when it is JSON."""
+        skill_map = {skill.skill_id: skill for skill in ctx.deps.loaded_skills}
+        skill = skill_map.get(skill_id)
+        if skill is None:
+            return {
+                "ok": False,
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": f"Skill not loaded: {skill_id}",
+                "payload": None,
+            }
+        return await run_skill_script_dir(skill.scripts_dir, script_name=script_name, args=args)
+
     return agent
 
 
@@ -184,6 +302,7 @@ async def run_agent(
     toolsets: list[object] | None = None,
 ) -> AgentDecision:
     selected_toolsets = toolsets or []
+    loaded_skills = load_skills(request.skill_ids)
     logger.info(
         "Starting agent run for job=%s trigger=%s toolsets=%s skills=%s",
         request.job_name,
@@ -195,7 +314,7 @@ async def run_agent(
         request=request,
         workspace_dir=workspace_dir,
         allowed_script_dir=settings.allowed_script_dir,
-        skill_texts=load_skill_texts(request.skill_ids),
+        loaded_skills=loaded_skills,
     )
     agent = create_agent(settings=settings, toolsets=selected_toolsets)
     async with agent:

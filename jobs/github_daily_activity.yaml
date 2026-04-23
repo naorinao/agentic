@@ -1,0 +1,19 @@
+name: github_daily_activity
+prompt: >-
+  Target GitHub username: octocat.
+  Use local-time today unless a different date is explicitly requested.
+  Only report materially useful engineering activity.
+skills:
+  - default
+  - digest
+  - github_daily_activity
+mcp:
+  enabled: true
+  transport: stdio
+  command: python
+  args:
+    - -m
+    - app.mcp_server
+  tool_prefix: ops
+notify:
+  slack_webhook_env: SLACK_WEBHOOK_URL

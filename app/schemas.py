@@ -72,6 +72,6 @@ class JobConfig(BaseModel):
     name: str
     prompt: str | None = None
     skills: list[str] = Field(default_factory=list)
-    fetch: FetchConfig
+    fetch: FetchConfig | None = None
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)

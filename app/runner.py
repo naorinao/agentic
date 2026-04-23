@@ -35,17 +35,23 @@ async def run_job(job_name: str, trigger: str, dry_run: bool, log_level: str | N
     job = load_job_config(job_name)
     logger.info("Loaded job configuration for %s", job.name)
 
-    logger.info("Beginning fetch step")
-    fetched_data = await fetch_data(
-        job.fetch,
-        timeout_seconds=settings.fetch_timeout_seconds,
-        workspace_dir=workspace_dir,
-    )
-    logger.info("Fetch step completed source=%s", fetched_data.source)
+    fetched_items = []
+    if job.fetch is not None:
+        logger.info("Beginning fetch step")
+        fetched_data = await fetch_data(
+            job.fetch,
+            timeout_seconds=settings.fetch_timeout_seconds,
+            workspace_dir=workspace_dir,
+        )
+        logger.info("Fetch step completed source=%s", fetched_data.source)
+        fetched_items.append(fetched_data)
+    else:
+        logger.info("Skipping fetch step because job has no fetch config")
+
     run_request = RunRequest(
         job_name=job.name,
         trigger=trigger,
-        data=[fetched_data],
+        data=fetched_items,
         skill_ids=job.skills,
         job_prompt=job.prompt,
     )

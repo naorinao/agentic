@@ -1,3 +1,9 @@
+---
+name: default
+description: Shared operating rules for scheduled jobs.
+version: "1.0"
+---
+
 Base operating rules:
 
 - Be conservative about sending Slack notifications.

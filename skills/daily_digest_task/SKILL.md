@@ -1,3 +1,9 @@
+---
+name: daily_digest_task
+description: Task contract for the sample daily digest job.
+version: "1.0"
+---
+
 Daily digest task:
 
 - Review the fetched payload and decide if it is important enough to send to Slack.

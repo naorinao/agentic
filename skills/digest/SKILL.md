@@ -1,3 +1,9 @@
+---
+name: digest
+description: Shared digest formatting heuristics for status and daily report jobs.
+version: "1.0"
+---
+
 Digest formatting rules:
 
 - Focus on the single most important observation first.

@@ -16,7 +16,7 @@ async def run_local_script(
     if not resolved_script.is_file():
         return {"ok": False, "exit_code": -1, "stdout": "", "stderr": f"Script not found: {script_path}"}
 
-    if not str(resolved_script).startswith(str(resolved_allowed_dir)):
+    if not resolved_script.is_relative_to(resolved_allowed_dir):
         return {
             "ok": False,
             "exit_code": -1,
